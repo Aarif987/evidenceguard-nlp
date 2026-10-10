@@ -1,0 +1,122 @@
+[
+  {
+    "id": "doc_1_mna_standard",
+    "title": "ABC Technologies / XYZ Robotics Acquisition",
+    "text": "On 12 March 2025, ABC Technologies announced that it had acquired XYZ Robotics for $40 million.",
+    "category": "Mergers & Acquisitions",
+    "target_schema": [
+      {
+        "name": "acquirer",
+        "display_name": "Acquirer",
+        "type": "string",
+        "expected_entity": "ORGANIZATION",
+        "description": "The acquiring corporate entity.",
+        "required": true
+      },
+      {
+        "name": "acquired_company",
+        "display_name": "Acquired Company",
+        "type": "string",
+        "expected_entity": "ORGANIZATION",
+        "description": "The target corporate entity being acquired.",
+        "required": true
+      },
+      {
+        "name": "announcement_date",
+        "display_name": "Announcement Date",
+        "type": "string",
+        "expected_entity": "DATE",
+        "description": "Date of announcement.",
+        "required": true
+      },
+      {
+        "name": "acquisition_amount",
+        "display_name": "Acquisition Amount",
+        "type": "string",
+        "expected_entity": "MONEY",
+        "description": "Total monetary value of the transaction.",
+        "required": true
+      }
+    ]
+  },
+  {
+    "id": "doc_2_health_acquisition",
+    "title": "Global Health Systems / MedAI Corp Transaction",
+    "text": "Global Health Systems finalized its acquisition of MedAI Corp on October 4, 2024, in an all-cash transaction valued at $125.5 million. The deal expands Global Health Systems into diagnostic automation.",
+    "category": "Healthcare Technology",
+    "target_schema": [
+      {
+        "name": "acquirer",
+        "display_name": "Acquirer",
+        "type": "string",
+        "expected_entity": "ORGANIZATION",
+        "description": "The acquiring corporate entity.",
+        "required": true
+      },
+      {
+        "name": "acquired_company",
+        "display_name": "Acquired Company",
+        "type": "string",
+        "expected_entity": "ORGANIZATION",
+        "description": "The target corporate entity being acquired.",
+        "required": true
+      },
+      {
+        "name": "announcement_date",
+        "display_name": "Announcement Date",
+        "type": "string",
+        "expected_entity": "DATE",
+        "description": "Date of announcement.",
+        "required": true
+      },
+      {
+        "name": "acquisition_amount",
+        "display_name": "Acquisition Amount",
+        "type": "string",
+        "expected_entity": "MONEY",
+        "description": "Total monetary value of the transaction.",
+        "required": true
+      }
+    ]
+  },
+  {
+    "id": "doc_3_funding_ambiguous",
+    "title": "Quantum Dynamics Series B Funding",
+    "text": "On July 19, 2023, Quantum Dynamics secured $15 million in Series B funding led by Horizon Ventures. However, previous reports suggested Horizon Ventures had originally committed $20 million.",
+    "category": "Venture Capital",
+    "target_schema": [
+      {
+        "name": "funded_company",
+        "display_name": "Funded Company",
+        "type": "string",
+        "expected_entity": "ORGANIZATION",
+        "description": "Company receiving capital investment.",
+        "required": true
+      },
+      {
+        "name": "lead_investor",
+        "display_name": "Lead Investor",
+        "type": "string",
+        "expected_entity": "ORGANIZATION",
+        "description": "Primary venture fund leading the round.",
+        "required": true
+      },
+      {
+        "name": "funding_date",
+        "display_name": "Funding Date",
+        "type": "string",
+        "expected_entity": "DATE",
+        "description": "Date funding was secured.",
+        "required": true
+      },
+      {
+        "name": "investment_amount",
+        "display_name": "Investment Amount",
+        "type": "string",
+        "expected_entity": "MONEY",
+        "description": "Final secured investment amount.",
+        "required": true
+      }
+    ]
+  }
+]

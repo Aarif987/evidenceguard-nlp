@@ -1,0 +1,36 @@
+{
+  "doc_1_mna_standard": {
+    "entities": [
+      {
+        "text": "12 March 2025",
+        "label": "DATE",
+        "start": 3,
+        "end": 16
+      },
+      {
+        "text": "ABC Technologies",
+        "label": "ORGANIZATION",
+        "start": 18,
+        "end": 34
+      },
+      {
+        "text": "XYZ Robotics",
+        "label": "ORGANIZATION",
+        "start": 66,
+        "end": 78
+      },
+      {
+        "text": "$40 million",
+        "label": "MONEY",
+        "start": 83,
+        "end": 94
+      }
+    ],
+    "ground_truth_fields": {
+      "acquirer": "ABC Technologies",
+      "acquired_company": "XYZ Robotics",
+      "announcement_date": "12 March 2025",
+      "acquisition_amount": "$40 million"
+    }
+  }
+}
