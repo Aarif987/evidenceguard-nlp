@@ -30,6 +30,9 @@ class PipelineResult:
     calibrated_assessments: Dict[str, Dict[str, Any]]
     extraction_metrics: Dict[str, Any]
     ner_metrics: Optional[Dict[str, Any]] = None
+    model_name: str = Config.DEFAULT_GEMINI_MODEL
+    ner_source: str = "gliner"
+    ner_diagnostic: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -44,6 +47,8 @@ class HTLVIEPipeline:
         model_name: Optional[str] = None,
         ner_model_name: Optional[str] = None,
         device: str = "cpu",
+        request_timeout: Optional[float] = None,
+        max_retries: Optional[int] = None,
     ):
         self.ner_recognizer = GLiNEREntityRecognizer(
             model_name=ner_model_name or Config.GLINER_MODEL,
@@ -51,8 +56,10 @@ class HTLVIEPipeline:
         )
         self.context_builder = ContextBuilder()
         self.llm_extractor = GeminiLLMExtractor(
-            api_key=api_key or Config.GEMINI_API_KEY,
-            model_name=model_name or Config.GEMINI_MODEL,
+            api_key=api_key if api_key is not None else Config.GEMINI_API_KEY,
+            model_name=model_name if model_name is not None else Config.GEMINI_MODEL,
+            request_timeout=request_timeout,
+            max_retries=max_retries,
         )
         self.verifier = IndependentEvidenceVerifier()
 
@@ -62,6 +69,8 @@ class HTLVIEPipeline:
         custom_schema: Optional[List[SchemaField]] = None,
         ner_labels: Optional[List[str]] = None,
         force_mock_llm: bool = False,
+        force_live_llm: bool = False,
+        execution_mode: Optional[str] = None,
         force_fallback_ner: bool = False,
         gold_entities: Optional[List[Dict[str, Any]]] = None,
     ) -> PipelineResult:
@@ -72,6 +81,8 @@ class HTLVIEPipeline:
             custom_schema: Optional custom SchemaField list.
             ner_labels: Optional list of entity types to detect.
             force_mock_llm: If True, bypasses API to use mock extraction.
+            force_live_llm: If True, requires live Gemini API and raises on error instead of falling back to mock.
+            execution_mode: Optional explicit mode ('auto', 'live', or 'mock').
             force_fallback_ner: If True, bypasses GLiNER to use regex heuristic fallback.
             gold_entities: Optional gold NER annotations for benchmark evaluation.
 
@@ -104,13 +115,14 @@ class HTLVIEPipeline:
         )
 
         # 4. LLM Structured Extraction (Gemini / Mock)
-        if force_mock_llm:
-            self.llm_extractor.force_mock = True
+        self.llm_extractor.force_mock = force_mock_llm
+        self.llm_extractor.force_live = force_live_llm
         extractions = self.llm_extractor.extract(
             text=text,
             schema_fields=schema,
             detected_entities=entities,
             prompt_payload=prompt_payload,
+            execution_mode=execution_mode,
         )
 
         # 5. Independent Evidence Verification
@@ -154,4 +166,7 @@ class HTLVIEPipeline:
             calibrated_assessments={k: v.to_dict() for k, v in calibrated.items()},
             extraction_metrics=ext_metrics,
             ner_metrics=ner_metrics,
+            model_name=self.llm_extractor.model_name,
+            ner_source=self.ner_recognizer.active_backend,
+            ner_diagnostic=self.ner_recognizer.last_diagnostic,
         )

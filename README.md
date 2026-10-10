@@ -128,10 +128,13 @@ To enable live Gemini API inference:
 2. Edit `.env` and set your `GEMINI_API_KEY`:
    ```ini
    GEMINI_API_KEY=your_actual_api_key
-   GEMINI_MODEL=gemini-1.5-flash
+   GEMINI_MODEL=gemini-3.8-flash
+   GEMINI_TIMEOUT_SECONDS=60.0
+   GEMINI_MAX_RETRIES=2
+   GEMINI_MAX_OUTPUT_TOKENS=2048
    PIPELINE_MODE=auto
    ```
-   *(Alternatively, you can paste an API key directly into the Streamlit sidebar at runtime.)*
+   *(Alternatively, you can paste an API key, adjust the per-attempt Request Timeout, and select any supported model directly in the Streamlit sidebar at runtime: `gemini-3.8-flash` [default], `gemini-3.7-flash`, `gemini-3.6-flash`, `gemini-3.5-flash`, `gemini-3.1-flash-lite`, `gemini-2.5-flash`, `gemini-2.5-flash-lite`, `gemini-2.5-pro`.)*
 
 ---
 
@@ -164,6 +167,10 @@ To enable live Gemini API inference:
 
 ## 8. Limitations & Troubleshooting
 
-- **Hardware Constraints:** Designed for laptops with 16 GB RAM and GTX 1050 Ti (or CPU-only execution). Uses `urchade/gliner_small-v2.1` on CPU by default to avoid CUDA out-of-memory errors.
-- **Offline Execution:** If Hugging Face Hub is unreachable during the initial GLiNER weight download, `GLiNEREntityRecognizer` automatically falls back to a deterministic regex entity spotter (`source="heuristic_fallback"`), ensuring uninterrupted execution.
+- **Hardware Constraints:** Designed for laptops with 16 GB RAM and GTX 1050 Ti (or CPU-only execution). Uses `urchade/gliner_small-v2.1` (`microsoft/deberta-v3-small` backbone) on CPU by default to avoid CUDA out-of-memory errors.
+- **Gemini API Timeouts & Bounded Retries:** `GeminiLLMExtractor` uses an explicit, configurable per-attempt timeout (`GEMINI_TIMEOUT_SECONDS=60.0` by default, adjustable in `.env` or the Streamlit sidebar) with bounded exponential-backoff retries (`GEMINI_MAX_RETRIES=2`) for transient `504 Deadline Exceeded` and `503 Service Unavailable` errors, while immediately failing fast on invalid API-key (`400/401/403`) or unsupported-model (`404`) errors.
+- **GLiNER Model Weight Download on Windows (`HF_HUB_DISABLE_XET`):** On Windows, the optional `hf-xet` chunked transfer extension in `huggingface_hub` can stall at 64 MiB when downloading `urchade/gliner_small-v2.1/pytorch_model.bin`. `src/ner.py` sets `HF_HUB_DISABLE_XET=1` automatically to force standard HTTP downloads, and if `hf-xet` is installed in `.venv`, removing it (`.\.venv\Scripts\python.exe -m pip uninstall -y hf-xet`) ensures smooth weight caching.
+- **Offline Execution & Diagnostic Fallback:** `GLiNEREntityRecognizer` loads cached weights first (`local_files_only=True`) and falls back to online Hugging Face download (`local_files_only=False`) if not yet cached. If GLiNER fails to load or run, the UI surfaces a clear **NER Diagnostic** warning banner and explicitly labels fallback entities with `source="heuristic_fallback"` rather than silently presenting them as `gliner`.
 - **Verification Scope:** The independent verifier performs exact matching, case/punctuation normalization, financial multiplier equivalence (`$40M` == `$40 million`), and date format normalization (`2025-03-12` == `12 March 2025`). It does not claim open-ended semantic entailment for complex paraphrasing.
+
+

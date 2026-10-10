@@ -44,14 +44,12 @@ class ContextBuilder:
     def build_system_instruction(self) -> str:
         """Constructs system instructions strictly enforcing factual grounding and JSON output."""
         return (
-            "You are a high-precision Information Extraction engine adhering to strict factual evidence grounding.\n"
-            "Your task is to extract structured values defined in the target schema from the provided document.\n\n"
+            "You are a factual Information Extraction engine.\n"
             "CRITICAL CONSTRAINTS:\n"
-            "1. Grounding: Every extracted value MUST be directly supported by the source text.\n"
-            "2. Hallucinations: Do NOT invent, assume, or extrapolate facts. If a value is absent or ambiguous, set it to null.\n"
-            "3. NER Cues: Pre-detected entity spans are provided as localization hints only. They may be incomplete or noisy; do NOT accept them unconditionally.\n"
-            "4. Evidence Citation: For every non-null field, you must provide the exact substring quote from the document that justifies your extraction.\n"
-            "5. Format: Return ONLY a valid JSON object matching the requested schema.\n"
+            "1. Every extracted value MUST be directly supported by the document; use null if absent or ambiguous.\n"
+            "2. Pre-detected entity spans are hints only; verify against the document.\n"
+            "3. For every non-null field, provide the exact verbatim substring quote from the document.\n"
+            "4. Return ONLY valid JSON matching the requested schema."
         )
 
     def build_prompt_payload(
@@ -60,7 +58,7 @@ class ContextBuilder:
         detected_entities: List[EntityMention],
         custom_schema: Optional[List[SchemaField]] = None,
     ) -> Dict[str, Any]:
-        """Builds structured prompt payload and human-readable prompt string.
+        """Builds structured prompt payload and compact prompt string.
 
         Args:
             text: The authoritative source document.
@@ -72,7 +70,7 @@ class ContextBuilder:
         """
         active_schema = custom_schema or self.schema_fields
 
-        # Format detected entities as structured hints
+        # Full structured entity hints preserved in payload dict
         entity_hints = [
             {
                 "id": ent.id,
@@ -85,7 +83,7 @@ class ContextBuilder:
             for ent in detected_entities
         ]
 
-        # Format schema fields
+        # Full schema dictionary preserved in payload dict
         schema_dict = {
             f.name: {
                 "display_name": f.display_name,
@@ -97,30 +95,36 @@ class ContextBuilder:
             for f in active_schema
         }
 
-        # Expected output structure description
-        expected_json_structure = {
+        # Compact representations for the LLM prompt to minimize input tokens and latency
+        compact_hints = [
+            {"text": ent.text, "label": ent.label}
+            for ent in detected_entities
+        ]
+        compact_schema = {
+            f.name: {
+                "type": f.type,
+                "entity": f.expected_entity,
+                "desc": f.description,
+            }
+            for f in active_schema
+        }
+        compact_output_spec = {
             "extractions": {
                 f.name: {
-                    "value": f"<Extracted value or null if not found>",
-                    "evidence_quote": f"<Exact verbatim substring quote from text supporting this extraction, or null>",
-                    "confidence": "<Float between 0.0 and 1.0 representing model confidence>",
+                    "value": "string|null",
+                    "evidence_quote": "verbatim quote|null",
+                    "confidence": 0.95,
                 }
                 for f in active_schema
             }
         }
 
         prompt_text = (
-            f"=== AUTHORITATIVE SOURCE DOCUMENT ===\n"
-            f"{text}\n\n"
-            f"=== PRE-DETECTED ENTITY SPANS (HINTS ONLY) ===\n"
-            f"{json.dumps(entity_hints, indent=2)}\n\n"
-            f"=== TARGET EXTRACTION SCHEMA ===\n"
-            f"{json.dumps(schema_dict, indent=2)}\n\n"
-            f"=== INSTRUCTIONS ===\n"
-            f"Extract each schema field based strictly on the source document.\n"
-            f"Output a valid JSON object matching this exact format:\n"
-            f"{json.dumps(expected_json_structure, indent=2)}\n\n"
-            f"Respond with JSON only. No explanations, no markdown formatting outside json."
+            f"DOCUMENT:\n{text}\n\n"
+            f"ENTITY_HINTS:\n{json.dumps(compact_hints, separators=(',', ':'))}\n\n"
+            f"SCHEMA:\n{json.dumps(compact_schema, separators=(',', ':'))}\n\n"
+            f"OUTPUT_JSON_FORMAT:\n{json.dumps(compact_output_spec, separators=(',', ':'))}\n"
+            f"Return JSON only."
         )
 
         return {
@@ -129,3 +133,4 @@ class ContextBuilder:
             "schema": schema_dict,
             "entity_hints": entity_hints,
         }
+

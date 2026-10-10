@@ -160,10 +160,28 @@ with st.sidebar:
         help="Optional: Enter a Google Gemini API key or leave blank to run in Deterministic Mock Mode.",
     )
 
+    available_models = list(Config.SUPPORTED_GEMINI_MODELS)
+    if Config.GEMINI_MODEL and Config.GEMINI_MODEL not in available_models:
+        available_models.insert(0, Config.GEMINI_MODEL)
+    default_model_idx = (
+        available_models.index(Config.GEMINI_MODEL)
+        if Config.GEMINI_MODEL in available_models
+        else 0
+    )
+
     model_option = st.selectbox(
         "Gemini Model",
-        options=["gemini-1.5-flash", "gemini-2.0-flash", "gemini-1.5-pro"],
-        index=0,
+        options=available_models,
+        index=default_model_idx,
+    )
+
+    timeout_option = st.number_input(
+        "Request Timeout (s)",
+        min_value=10.0,
+        max_value=300.0,
+        value=float(Config.GEMINI_TIMEOUT_SECONDS),
+        step=10.0,
+        help="Per-attempt timeout in seconds for live Gemini API requests (with bounded exponential-backoff retries).",
     )
 
     exec_mode_option = st.radio(
@@ -172,10 +190,17 @@ with st.sidebar:
         index=0 if Config.is_api_key_valid() else 1,
     )
 
-    force_mock = (
-        True
-        if "Mock" in exec_mode_option
-        else (False if "Live" in exec_mode_option else not bool(api_key_input and len(api_key_input) > 10))
+    is_force_mock = "Mock" in exec_mode_option
+    is_force_live = "Live" in exec_mode_option
+    if is_force_mock:
+        selected_mode = PipelineMode.MOCK.value
+    elif is_force_live:
+        selected_mode = PipelineMode.LIVE.value
+    else:
+        selected_mode = PipelineMode.AUTO.value
+
+    will_attempt_live = is_force_live or (
+        selected_mode == PipelineMode.AUTO.value and Config.is_api_key_valid(api_key_input)
     )
 
     st.subheader("2. NER Engine Settings")
@@ -242,13 +267,15 @@ with tab_pipeline:
         st.write("")
         run_btn = st.button("⚡ Execute HTL-VIE Pipeline", type="primary", width="stretch")
 
-        # Status indicator
-        if force_mock:
+        # Status indicator reflecting active or last executed mode
+        active_res = st.session_state.pipeline_result
+        show_mock_badge = active_res.is_mock if active_res is not None else (not will_attempt_live)
+        if show_mock_badge:
             st.markdown('<span class="mode-badge-mock">MODE: DEMO / MOCK</span>', unsafe_allow_html=True)
             st.caption("Operating deterministically without external API costs.")
         else:
             st.markdown('<span class="mode-badge-live">MODE: LIVE GEMINI API</span>', unsafe_allow_html=True)
-            st.caption(f"Model: {model_option}")
+            st.caption(f"Model: {active_res.model_name if active_res else model_option}")
 
     # Execution Trigger
     if run_btn or run_negative_demo:
@@ -257,13 +284,16 @@ with tab_pipeline:
                 pipeline = HTLVIEPipeline(
                     api_key=api_key_input,
                     model_name=model_option,
+                    request_timeout=float(timeout_option),
                 )
 
                 # Execute pipeline
                 result = pipeline.run(
                     document_text=doc_text,
                     custom_schema=st.session_state.schema_fields,
-                    force_mock_llm=force_mock,
+                    force_mock_llm=is_force_mock,
+                    force_live_llm=is_force_live,
+                    execution_mode=selected_mode,
                     force_fallback_ner=force_fallback_ner,
                 )
 
@@ -298,10 +328,26 @@ with tab_pipeline:
                         )
 
                 st.session_state.pipeline_result = result
-                st.success(f"Pipeline executed in {result.runtime_seconds} seconds.")
+                fallback_errors = [
+                    v.get("raw_error")
+                    for v in result.raw_extractions.values()
+                    if v.get("raw_error")
+                ]
+                if result.is_mock and fallback_errors:
+                    st.warning(
+                        f"Auto Mode Fallback: Live Gemini API call did not succeed ({fallback_errors[0]}). "
+                        "Results below were generated in Deterministic Mock Mode."
+                    )
+                mode_desc = (
+                    "Deterministic Mock/Demo Mode"
+                    if result.is_mock
+                    else f"Live Gemini API ({result.model_name})"
+                )
+                st.success(f"Pipeline executed in {result.runtime_seconds} seconds [{mode_desc}].")
 
             except Exception as e:
-                st.error(f"Execution Error: {str(e)}")
+                st.session_state.pipeline_result = None
+                st.error(f"Execution Error (Model: {model_option}): {str(e)}")
 
     # Display Results
     if st.session_state.pipeline_result:
@@ -309,6 +355,16 @@ with tab_pipeline:
 
         st.markdown("---")
         st.subheader("1. Entity Localization (GLiNER Transformer / Heuristic)")
+
+        if getattr(res, "ner_diagnostic", None):
+            st.warning(f"NER Diagnostic: {res.ner_diagnostic}")
+
+        ner_source_label = (
+            f"GLiNER Transformer ({Config.GLINER_MODEL})"
+            if getattr(res, "ner_source", "gliner") == "gliner"
+            else "Heuristic Rule-Based Fallback (heuristic_fallback)"
+        )
+        st.caption(f"Active Entity Source: **{ner_source_label}**")
 
         if res.entities:
             ent_rows = [

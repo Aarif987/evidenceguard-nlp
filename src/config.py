@@ -42,10 +42,50 @@ class PipelineMode(str, Enum):
     MOCK = "mock"
 
 
+def normalize_model_id(model_name: str, default: str = "gemini-3.8-flash") -> str:
+    """Normalize a Gemini model identifier by stripping whitespace and any 'models/' prefix."""
+    if not model_name or not str(model_name).strip():
+        return default
+    cleaned = str(model_name).strip()
+    if cleaned.startswith("models/"):
+        cleaned = cleaned[len("models/"):]
+    return cleaned or default
+
+
 class Config:
     """Application configuration container."""
+    DEFAULT_GEMINI_MODEL: str = "gemini-3.8-flash"
+    SUPPORTED_GEMINI_MODELS: List[str] = [
+        "gemini-3.8-flash",
+        "gemini-3.7-flash",
+        "gemini-3.6-flash",
+        "gemini-3.5-flash",
+        "gemini-3.1-flash-lite",
+        "gemini-2.5-flash",
+        "gemini-2.5-flash-lite",
+        "gemini-2.5-pro",
+    ]
+
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "").strip()
-    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-1.5-flash").strip()
+    GEMINI_MODEL: str = normalize_model_id(
+        os.getenv("GEMINI_MODEL", DEFAULT_GEMINI_MODEL),
+        default=DEFAULT_GEMINI_MODEL,
+    )
+    DEFAULT_GEMINI_TIMEOUT: float = 60.0
+    DEFAULT_GEMINI_MAX_RETRIES: int = 2
+    DEFAULT_GEMINI_INITIAL_BACKOFF: float = 1.5
+    DEFAULT_GEMINI_BACKOFF_MULTIPLIER: float = 2.0
+    DEFAULT_GEMINI_MAX_OUTPUT_TOKENS: int = 2048
+
+    GEMINI_TIMEOUT_SECONDS: float = float(
+        os.getenv("GEMINI_TIMEOUT_SECONDS", str(DEFAULT_GEMINI_TIMEOUT))
+    )
+    GEMINI_MAX_RETRIES: int = int(
+        os.getenv("GEMINI_MAX_RETRIES", str(DEFAULT_GEMINI_MAX_RETRIES))
+    )
+    GEMINI_MAX_OUTPUT_TOKENS: int = int(
+        os.getenv("GEMINI_MAX_OUTPUT_TOKENS", str(DEFAULT_GEMINI_MAX_OUTPUT_TOKENS))
+    )
     GLINER_MODEL: str = os.getenv("GLINER_MODEL", "urchade/gliner_small-v2.1").strip()
     PIPELINE_MODE: str = os.getenv("PIPELINE_MODE", "auto").strip().lower()
 
@@ -96,23 +136,23 @@ class Config:
     ]
 
     @classmethod
-    def is_api_key_valid(cls) -> bool:
+    def is_api_key_valid(cls, api_key: str = None) -> bool:
         """Check if a non-placeholder API key is configured."""
-        if not cls.GEMINI_API_KEY:
+        key = (api_key if api_key is not None else cls.GEMINI_API_KEY).strip()
+        if not key:
             return False
-        if "your_" in cls.GEMINI_API_KEY or "placeholder" in cls.GEMINI_API_KEY.lower():
+        if "your_" in key or "placeholder" in key.lower():
             return False
-        return len(cls.GEMINI_API_KEY) > 10
+        return len(key) > 10
 
     @classmethod
-    def get_effective_mode(cls, override_mode: str = None) -> PipelineMode:
+    def get_effective_mode(cls, override_mode: str = None, api_key: str = None) -> PipelineMode:
         """Resolve effective execution mode (live vs mock)."""
-        mode = override_mode or cls.PIPELINE_MODE
+        mode = (override_mode or cls.PIPELINE_MODE).strip().lower()
         if mode == PipelineMode.LIVE.value:
-            if not cls.is_api_key_valid():
-                return PipelineMode.MOCK
             return PipelineMode.LIVE
         elif mode == PipelineMode.MOCK.value:
             return PipelineMode.MOCK
         else:  # AUTO
-            return PipelineMode.LIVE if cls.is_api_key_valid() else PipelineMode.MOCK
+            return PipelineMode.LIVE if cls.is_api_key_valid(api_key) else PipelineMode.MOCK
+
